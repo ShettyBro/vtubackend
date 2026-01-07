@@ -3,8 +3,6 @@
  * 
  * CRITICAL: NO database or blob connections are established here
  * Connections are lazy-loaded when first API call requires them
- * 
- * FIX: Updated paths to match modules/ folder structure
  */
 
 const express = require('express');
@@ -16,9 +14,12 @@ const rateLimit = require('express-rate-limit');
 const requestIdMiddleware = require('./middleware/requestId.middleware');
 const errorHandler = require('./middleware/error.middleware');
 
-// Routes
-// FIX: Updated path to modules/students/
+// Routes - WITH DEBUG LOGGING
+console.log('[DEBUG] Loading students routes from: ./modules/students/students.routes');
 const studentsRoutes = require('./modules/students/students.routes');
+console.log('[DEBUG] studentsRoutes type:', typeof studentsRoutes);
+console.log('[DEBUG] studentsRoutes is function?:', typeof studentsRoutes === 'function');
+console.log('[DEBUG] studentsRoutes value:', studentsRoutes);
 
 const app = express();
 
@@ -26,19 +27,15 @@ const app = express();
 // SECURITY MIDDLEWARE
 // ============================================
 
-// Helmet - Security headers
 app.use(helmet());
-
-// CORS - Configure based on your frontend domain
 app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',
   credentials: true
 }));
 
-// Rate limiting - Prevent abuse
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
@@ -57,19 +54,12 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // CUSTOM MIDDLEWARE
 // ============================================
 
-// Request ID tracking for debugging
 app.use(requestIdMiddleware);
 
 // ============================================
 // HEALTH CHECK ENDPOINT
 // ============================================
 
-/**
- * Health Check - CRITICAL for Railway deployments
- * 
- * Railway pings this endpoint to verify app is running
- * NEVER add database or blob checks here - must respond instantly
- */
 app.get('/api/health', (req, res) => {
   res.status(200).json({
     success: true,
@@ -83,7 +73,14 @@ app.get('/api/health', (req, res) => {
 // API ROUTES
 // ============================================
 
+console.log('[DEBUG] About to register /api/students route...');
+if (!studentsRoutes) {
+  console.error('[ERROR] studentsRoutes is undefined!');
+  throw new Error('studentsRoutes module failed to load');
+}
+
 app.use('/api/students', studentsRoutes);
+console.log('[DEBUG] Successfully registered /api/students route');
 
 // ============================================
 // 404 HANDLER
