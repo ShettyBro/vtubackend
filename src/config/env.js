@@ -1,16 +1,9 @@
-// src/config/env.js
-
-// NOTE:
-// On Azure Linux App Service, environment variables
-// are injected automatically via App Settings.
-// dotenv is ONLY useful for local development.
+import dotenv from "dotenv";
 
 if (process.env.NODE_ENV !== "production") {
-  const dotenv = await import("dotenv");
   dotenv.config();
 }
 
-// Required environment variables
 const requiredVars = [
   "DB_SERVER",
   "DB_NAME",
@@ -27,7 +20,6 @@ for (const key of requiredVars) {
 
 const env = {
   env: process.env.NODE_ENV || "production",
-
   port: process.env.PORT || 8080,
 
   db: {
@@ -36,8 +28,7 @@ const env = {
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     options: {
-      encrypt: true,
-      trustServerCertificate: false
+      encrypt: true
     }
   },
 
