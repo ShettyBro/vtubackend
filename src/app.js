@@ -3,8 +3,9 @@
  * 
  * CRITICAL: NO database or blob connections are established here
  * Connections are lazy-loaded when first API call requires them
+ * 
+ * FIX: Updated paths to match modules/ folder structure
  */
-
 
 const express = require('express');
 const cors = require('cors');
@@ -16,7 +17,8 @@ const requestIdMiddleware = require('./middleware/requestId.middleware');
 const errorHandler = require('./middleware/error.middleware');
 
 // Routes
-const studentsRoutes = require('./routes/students.routes');
+// FIX: Updated path to modules/students/
+const studentsRoutes = require('./modules/students/students.routes');
 
 const app = express();
 

@@ -13,14 +13,15 @@
  * - Blob uploads integrated with Azure Storage
  * - Clear error messages for debugging
  * 
- * FIX: Removed duplicate require statements (were at top of file)
- * FIX: Removed response.util imports (services should NOT use response helpers)
+ * FIX: Updated paths for modules/ folder structure
  */
 
-const { getPool } = require('../config/database');
-const { hashPassword, comparePassword } = require('../utils/password.util');
-const { generateToken } = require('../utils/jwt.util');
-const { uploadDocument } = require('../utils/blobUpload.util');
+// FIX: Config is in src/config/
+const { getPool } = require('../../config/database');
+// FIX: Utils are in src/utils/
+const { hashPassword, comparePassword } = require('../../utils/password.util');
+const { generateToken } = require('../../utils/jwt.util');
+const { uploadDocument } = require('../../utils/blobUpload.util');
 
 /**
  * Register a new student

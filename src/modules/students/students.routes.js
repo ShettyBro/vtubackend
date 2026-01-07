@@ -12,14 +12,16 @@
  * - Multer configured for in-memory storage (no disk writes)
  * - All routes use standardized response format
  * 
- * FIX: Removed duplicate require statements (were at top of file)
+ * FIX: Updated paths for modules/ folder structure
  */
 
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const studentsController = require('../controllers/students.controller');
-const { authenticateToken } = require('../middleware/auth.middleware');
+// FIX: Controller is in same folder (modules/students/)
+const studentsController = require('./students.controller');
+// FIX: Middleware is in src/middleware/
+const { authenticateToken } = require('../../middleware/auth.middleware');
 
 // Configure multer for in-memory file uploads (Railway-friendly)
 // No disk writes - files go directly to Azure Blob Storage

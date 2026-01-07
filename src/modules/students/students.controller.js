@@ -10,12 +10,13 @@
  * - No stack traces exposed in production
  * - Consistent response format across all endpoints
  * 
- * FIX: Removed duplicate require statements (were at top of file)
- * FIX: Corrected relative path for response.util (from ./utils to ../utils)
+ * FIX: Updated paths for modules/ folder structure
  */
 
-const { successResponse, errorResponse } = require('../utils/response.util');
-const studentsService = require('../services/students.service');
+// FIX: Utils are in src/utils/
+const { successResponse, errorResponse } = require('../../utils/response.util');
+// FIX: Service is in same folder (modules/students/)
+const studentsService = require('./students.service');
 
 /**
  * Register a new student
