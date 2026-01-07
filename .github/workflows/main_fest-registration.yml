@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     permissions:
       contents: read #This is required for actions/checkout
 
@@ -28,7 +28,7 @@ jobs:
           npm install
           npm run build --if-present
           npm run test --if-present
-      
+
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
@@ -51,13 +51,13 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_FB40A468F48D4252BD5CD4C9542434B6 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_816063DBFAA744C7A21C1C4884D66531 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_E1C9C7DBC0B24ED2B925FE0FE855413E }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_856213BA88BF44B08C3EA58CBC079F85 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_AAC99019275C433E9AC61BEB707850DA }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_1571A480F0B945E2BF7E25F9C1928D7D }}
 
       - name: 'Deploy to Azure Web App'
-        uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
         with:
           app-name: 'fest-registration'
           slot-name: 'Production'
