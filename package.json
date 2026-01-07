@@ -2,8 +2,8 @@
   "name": "vtubackend",
   "version": "1.0.0",
   "description": "VTU Fest Backend API",
-  "main": "src/server.js",
   "type": "module",
+  "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js"
   },
