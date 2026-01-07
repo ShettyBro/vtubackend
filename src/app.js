@@ -4,6 +4,10 @@
  * CRITICAL: NO database or blob connections are established here
  * Connections are lazy-loaded when first API call requires them
  */
+const { generateToken, verifyToken } = require('./utils/jwt.util');
+const { hashPassword, comparePassword } = require('./utils/password.util');
+const { uploadDocument } = require('./utils/blobUpload.util');
+const { successResponse, errorResponse } = require('./utils/response.util');
 
 const express = require('express');
 const cors = require('cors');

@@ -10,7 +10,10 @@
  * - No stack traces exposed in production
  * - Consistent response format across all endpoints
  */
-
+const { generateToken, verifyToken } = require('./utils/jwt.util');
+const { hashPassword, comparePassword } = require('./utils/password.util');
+const { uploadDocument } = require('./utils/blobUpload.util');
+const { successResponse, errorResponse } = require('./utils/response.util');
 const studentsService = require('../services/students.service');
 const { successResponse, errorResponse } = require('../utils/response.util');
 
