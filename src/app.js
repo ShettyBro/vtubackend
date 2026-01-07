@@ -16,10 +16,10 @@ const rateLimit = require('express-rate-limit');
 
 // Middleware
 const requestIdMiddleware = require('./middleware/requestId.middleware');
-const errorHandler = require('./middleware/errorHandler.middleware');
+const errorHandler = require('./middleware/error.middleware');
 
 // Routes
-const studentsRoutes = require('./routes/students.routes');
+const studentsRoutes = require('./modules/students/students.routes');
 
 const app = express();
 
