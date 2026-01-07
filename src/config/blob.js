@@ -1,12 +1,19 @@
 import { BlobServiceClient } from "@azure/storage-blob";
 import env from "./env.js";
 
-const blobServiceClient = BlobServiceClient.fromConnectionString(
-  process.env.AZURE_STORAGE_CONNECTION_STRING
-);
+let containerClient = null;
 
-const containerClient = blobServiceClient.getContainerClient(
-  process.env.AZURE_STORAGE_CONTAINER
-);
+export function getBlobContainer() {
+  if (containerClient) return containerClient;
 
-export { containerClient };
+  if (!env.blob.connectionString || !env.blob.container) {
+    throw new Error("Blob storage not configured");
+  }
+
+  const serviceClient = BlobServiceClient.fromConnectionString(
+    env.blob.connectionString
+  );
+
+  containerClient = serviceClient.getContainerClient(env.blob.container);
+  return containerClient;
+}

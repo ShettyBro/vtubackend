@@ -1,4 +1,4 @@
-import { containerClient } from "../config/blob.js";
+import { getBlobContainer } from "../config/blob.js";
 
 export async function uploadStudentDocument({
   collegeCode,
@@ -6,8 +6,9 @@ export async function uploadStudentDocument({
   file,
   filename
 }) {
-  const blobPath = `colleges/${collegeCode}/${usn}/application/${filename}`;
+  const containerClient = getBlobContainer();
 
+  const blobPath = `colleges/${collegeCode}/${usn}/application/${filename}`;
   const blockBlobClient = containerClient.getBlockBlobClient(blobPath);
 
   await blockBlobClient.uploadData(file.buffer, {
