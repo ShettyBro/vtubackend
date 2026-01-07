@@ -9,16 +9,23 @@ app.use(cors());
 app.use(express.json());
 app.use(requestId);
 
+/**
+ * Health check (NO DB)
+ */
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     status: "ok",
+    service: "VTU Fest Backend",
     time: new Date().toISOString(),
     requestId: req.requestId
   });
 });
 
+/**
+ * Root
+ */
 app.get("/", (req, res) => {
-  res.json({ message: "Fest Registration Backend Running" });
+  res.json({ message: "VTU Fest Backend API running" });
 });
 
 app.use(errorHandler);
