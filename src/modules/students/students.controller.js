@@ -9,13 +9,13 @@
  * - All errors caught and logged with request ID
  * - No stack traces exposed in production
  * - Consistent response format across all endpoints
+ * 
+ * FIX: Removed duplicate require statements (were at top of file)
+ * FIX: Corrected relative path for response.util (from ./utils to ../utils)
  */
-const { generateToken, verifyToken } = require('./utils/jwt.util');
-const { hashPassword, comparePassword } = require('./utils/password.util');
-const { uploadDocument } = require('./utils/blobUpload.util');
-const { successResponse, errorResponse } = require('./utils/response.util');
-const studentsService = require('../services/students.service');
+
 const { successResponse, errorResponse } = require('../utils/response.util');
+const studentsService = require('../services/students.service');
 
 /**
  * Register a new student

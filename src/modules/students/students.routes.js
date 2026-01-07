@@ -11,11 +11,9 @@
  * - Uses authenticateToken middleware for protected routes
  * - Multer configured for in-memory storage (no disk writes)
  * - All routes use standardized response format
+ * 
+ * FIX: Removed duplicate require statements (were at top of file)
  */
-const { generateToken, verifyToken } = require('./utils/jwt.util');
-const { hashPassword, comparePassword } = require('./utils/password.util');
-const { uploadDocument } = require('./utils/blobUpload.util');
-const { successResponse, errorResponse } = require('./utils/response.util');
 
 const express = require('express');
 const router = express.Router();

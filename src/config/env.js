@@ -1,6 +1,19 @@
-const env = {
-  env: process.env.NODE_ENV || "production",
-  port: Number(process.env.PORT || 8080),
+/**
+ * Environment Configuration
+ * 
+ * Railway Deployment Notes:
+ * - Railway injects environment variables automatically
+ * - All values have safe defaults for local development
+ * - JWT_SECRET must be set in production
+ * 
+ * FIX: Converted from ESM (export default) to CommonJS (module.exports)
+ */
+
+const config = {
+  server: {
+    port: parseInt(process.env.PORT || '8080', 10),
+    nodeEnv: process.env.NODE_ENV || 'production'
+  },
 
   db: {
     server: process.env.DB_SERVER || null,
@@ -11,15 +24,15 @@ const env = {
 
   jwt: {
     secret: process.env.JWT_SECRET || null,
-    expiryHours: Number(process.env.JWT_EXPIRY_HOURS || 4)
+    expiry: process.env.JWT_EXPIRY || '4h'
   },
 
   blob: {
     connectionString: process.env.AZURE_STORAGE_CONNECTION_STRING || null,
-    container: process.env.AZURE_STORAGE_CONTAINER || null
+    containerName: process.env.AZURE_STORAGE_CONTAINER || 'vtufest-documents'
   },
 
-  timezone: "Asia/Kolkata"
+  timezone: 'Asia/Kolkata'
 };
 
-export default env;
+module.exports = config;
