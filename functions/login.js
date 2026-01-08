@@ -3,6 +3,13 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
+/**
+ * IMPORTANT:
+ * Replace this with the actual user_id of:
+ * email = system@vtufest.local
+ */
+const SYSTEM_USER_ID = 42; // <-- CHANGE THIS
+
 const dbConfig = {
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
@@ -39,7 +46,7 @@ exports.handler = async (event) => {
 
   let body;
   try {
-    body = JSON.parse(event.body);
+    body = JSON.parse(event.body || "{}");
   } catch {
     return {
       statusCode: 400,
@@ -61,7 +68,7 @@ exports.handler = async (event) => {
   try {
     const pool = await sql.connect(dbConfig);
 
-    /* ================= RATE LIMIT CHECK ================= */
+    /* ================= RATE LIMIT ================= */
     const rateRes = await pool.request()
       .input("identifier", sql.VarChar, usn)
       .query(`
@@ -72,10 +79,10 @@ exports.handler = async (event) => {
 
     if (rateRes.recordset.length > 0) {
       const { attempt_count, last_attempt_at } = rateRes.recordset[0];
-      const diffMinutes =
+      const minutesSinceLast =
         (Date.now() - new Date(last_attempt_at).getTime()) / 60000;
 
-      if (attempt_count >= MAX_ATTEMPTS && diffMinutes < COOLDOWN_MINUTES) {
+      if (attempt_count >= MAX_ATTEMPTS && minutesSinceLast < COOLDOWN_MINUTES) {
         return {
           statusCode: 429,
           headers,
@@ -90,14 +97,19 @@ exports.handler = async (event) => {
     const studentRes = await pool.request()
       .input("usn", sql.VarChar, usn)
       .query(`
-        SELECT student_id, usn, college_id, password_hash, is_active
+        SELECT
+          student_id,
+          usn,
+          college_id,
+          password_hash,
+          is_active
         FROM students
         WHERE usn = @usn
       `);
 
     if (studentRes.recordset.length === 0) {
-      await recordFailure(pool, usn);
-      return invalidCred(headers);
+      await recordFailedAttempt(pool, usn);
+      return invalidCredentials(headers);
     }
 
     const student = studentRes.recordset[0];
@@ -110,14 +122,14 @@ exports.handler = async (event) => {
       };
     }
 
-    const passwordOk = await bcrypt.compare(
+    const passwordValid = await bcrypt.compare(
       password,
       student.password_hash
     );
 
-    if (!passwordOk) {
-      await recordFailure(pool, usn);
-      return invalidCred(headers);
+    if (!passwordValid) {
+      await recordFailedAttempt(pool, usn);
+      return invalidCredentials(headers);
     }
 
     /* ================= RESET RATE LIMIT ================= */
@@ -137,17 +149,17 @@ exports.handler = async (event) => {
       { expiresIn: "4h" }
     );
 
-    /* ================= AUDIT LOG (FK SAFE) ================= */
+    /* ================= AUDIT LOG ================= */
     await pool.request()
-      .input("actor_user_id", sql.Int, null)
-      .input("actor_role", sql.VarChar, "STUDENT")
+      .input("actor_user_id", sql.Int, SYSTEM_USER_ID)
+      .input("actor_role", sql.VarChar, "SYSTEM")
       .input("action_type", sql.VarChar, "STUDENT_LOGIN")
       .input("entity_type", sql.VarChar, "STUDENT")
       .input("entity_id", sql.Int, student.student_id)
       .input(
         "description",
         sql.VarChar,
-        `Student login successful. USN=${usn}`
+        `Student login successful. USN=${student.usn}`
       )
       .query(`
         INSERT INTO audit_logs (
@@ -189,7 +201,7 @@ exports.handler = async (event) => {
 
 /* ================= HELPERS ================= */
 
-async function recordFailure(pool, usn) {
+async function recordFailedAttempt(pool, usn) {
   await pool.request()
     .input("identifier", sql.VarChar, usn)
     .query(`
@@ -206,7 +218,7 @@ async function recordFailure(pool, usn) {
     `);
 }
 
-function invalidCred(headers) {
+function invalidCredentials(headers) {
   return {
     statusCode: 401,
     headers,
