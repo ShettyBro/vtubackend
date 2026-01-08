@@ -61,9 +61,8 @@ exports.handler = async (event) => {
   try {
     const pool = await sql.connect(dbConfig);
 
-    // ----- RATE LIMIT CHECK -----
-    const rateResult = await pool
-      .request()
+    /* ================= RATE LIMIT CHECK ================= */
+    const rateRes = await pool.request()
       .input("identifier", sql.VarChar, usn)
       .query(`
         SELECT attempt_count, last_attempt_at
@@ -71,10 +70,10 @@ exports.handler = async (event) => {
         WHERE identifier = @identifier
       `);
 
-    if (rateResult.recordset.length > 0) {
-      const { attempt_count, last_attempt_at } = rateResult.recordset[0];
-      const lastAttempt = new Date(last_attempt_at);
-      const diffMinutes = (Date.now() - lastAttempt.getTime()) / 60000;
+    if (rateRes.recordset.length > 0) {
+      const { attempt_count, last_attempt_at } = rateRes.recordset[0];
+      const diffMinutes =
+        (Date.now() - new Date(last_attempt_at).getTime()) / 60000;
 
       if (attempt_count >= MAX_ATTEMPTS && diffMinutes < COOLDOWN_MINUTES) {
         return {
@@ -87,9 +86,8 @@ exports.handler = async (event) => {
       }
     }
 
-    // ----- FETCH STUDENT -----
-    const studentResult = await pool
-      .request()
+    /* ================= FETCH STUDENT ================= */
+    const studentRes = await pool.request()
       .input("usn", sql.VarChar, usn)
       .query(`
         SELECT student_id, usn, college_id, password_hash, is_active
@@ -97,12 +95,12 @@ exports.handler = async (event) => {
         WHERE usn = @usn
       `);
 
-    if (studentResult.recordset.length === 0) {
+    if (studentRes.recordset.length === 0) {
       await recordFailure(pool, usn);
       return invalidCred(headers);
     }
 
-    const student = studentResult.recordset[0];
+    const student = studentRes.recordset[0];
 
     if (!student.is_active) {
       return {
@@ -112,23 +110,22 @@ exports.handler = async (event) => {
       };
     }
 
-    const passwordMatch = await bcrypt.compare(
+    const passwordOk = await bcrypt.compare(
       password,
       student.password_hash
     );
 
-    if (!passwordMatch) {
+    if (!passwordOk) {
       await recordFailure(pool, usn);
       return invalidCred(headers);
     }
 
-    // ----- RESET RATE LIMIT -----
-    await pool
-      .request()
+    /* ================= RESET RATE LIMIT ================= */
+    await pool.request()
       .input("identifier", sql.VarChar, usn)
       .query(`DELETE FROM login_attempts WHERE identifier = @identifier`);
 
-    // ----- GENERATE JWT -----
+    /* ================= JWT ================= */
     const token = jwt.sign(
       {
         student_id: student.student_id,
@@ -140,10 +137,9 @@ exports.handler = async (event) => {
       { expiresIn: "4h" }
     );
 
-    // ----- AUDIT LOG -----
-    await pool
-      .request()
-      .input("actor_user_id", sql.Int, student.student_id)
+    /* ================= AUDIT LOG (FK SAFE) ================= */
+    await pool.request()
+      .input("actor_user_id", sql.Int, null)
       .input("actor_role", sql.VarChar, "STUDENT")
       .input("action_type", sql.VarChar, "STUDENT_LOGIN")
       .input("entity_type", sql.VarChar, "STUDENT")
@@ -151,7 +147,7 @@ exports.handler = async (event) => {
       .input(
         "description",
         sql.VarChar,
-        `Student login successful for USN ${usn}`
+        `Student login successful. USN=${usn}`
       )
       .query(`
         INSERT INTO audit_logs (
@@ -180,6 +176,7 @@ exports.handler = async (event) => {
         token,
       }),
     };
+
   } catch (err) {
     console.error("Student login error:", err);
     return {
@@ -190,11 +187,10 @@ exports.handler = async (event) => {
   }
 };
 
-// ---------------- HELPERS ----------------
+/* ================= HELPERS ================= */
 
 async function recordFailure(pool, usn) {
-  await pool
-    .request()
+  await pool.request()
     .input("identifier", sql.VarChar, usn)
     .query(`
       MERGE login_attempts AS target
