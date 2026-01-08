@@ -28,11 +28,13 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const response = await handler(event, { requestId: 'local-test' });
+    const response = await handler(event);
 
     res.writeHead(response.statusCode, response.headers || {});
     res.end(response.body);
   });
 });
 
-server.listen(process.env.PORT || 3000);
+server.listen(process.env.PORT || 3000, () => {
+  console.log(`Server running on port ${process.env.PORT || 3000}`);
+});
