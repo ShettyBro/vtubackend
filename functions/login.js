@@ -3,12 +3,9 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
-/**
- * IMPORTANT:
- * Replace this with the actual user_id of:
- * email = system@vtufest.local
- */
-const SYSTEM_USER_ID = 42; // <-- CHANGE THIS
+const SYSTEM_USER_ID = 1;
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MINUTES = 15;
 
 const dbConfig = {
   user: process.env.DB_USER,
@@ -21,8 +18,7 @@ const dbConfig = {
   },
 };
 
-const MAX_ATTEMPTS = 5;
-const COOLDOWN_MINUTES = 15;
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 exports.handler = async (event) => {
   const headers = {
@@ -31,9 +27,12 @@ exports.handler = async (event) => {
     "Access-Control-Allow-Headers": "Content-Type",
   };
 
-  // Preflight
   if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 200, headers, body: "" };
+    return {
+      statusCode: 200,
+      headers,
+      body: "",
+    };
   }
 
   if (event.httpMethod !== "POST") {
@@ -46,7 +45,7 @@ exports.handler = async (event) => {
 
   let body;
   try {
-    body = JSON.parse(event.body || "{}");
+    body = JSON.parse(event.body);
   } catch {
     return {
       statusCode: 400,
@@ -65,54 +64,80 @@ exports.handler = async (event) => {
     };
   }
 
+  let pool;
   try {
-    const pool = await sql.connect(dbConfig);
+    pool = await sql.connect(dbConfig);
 
-    /* ================= RATE LIMIT ================= */
-    const rateRes = await pool.request()
-      .input("identifier", sql.VarChar, usn)
+    const rateLimitCheck = await pool
+      .request()
+      .input("usn", sql.VarChar, usn)
+      .input("lockout_duration", sql.Int, LOCKOUT_DURATION_MINUTES)
       .query(`
-        SELECT attempt_count, last_attempt_at
+        SELECT 
+          attempt_count,
+          last_attempt_at,
+          DATEDIFF(MINUTE, last_attempt_at, GETUTCDATE()) AS minutes_since_last
         FROM login_attempts
-        WHERE identifier = @identifier
+        WHERE identifier = @usn
+          AND attempt_count >= ${MAX_LOGIN_ATTEMPTS}
+          AND DATEDIFF(MINUTE, last_attempt_at, GETUTCDATE()) < @lockout_duration
       `);
 
-    if (rateRes.recordset.length > 0) {
-      const { attempt_count, last_attempt_at } = rateRes.recordset[0];
-      const minutesSinceLast =
-        (Date.now() - new Date(last_attempt_at).getTime()) / 60000;
-
-      if (attempt_count >= MAX_ATTEMPTS && minutesSinceLast < COOLDOWN_MINUTES) {
-        return {
-          statusCode: 429,
-          headers,
-          body: JSON.stringify({
-            message: "Too many login attempts. Please try again later.",
-          }),
-        };
-      }
+    if (rateLimitCheck.recordset.length > 0) {
+      const minutesRemaining = LOCKOUT_DURATION_MINUTES - rateLimitCheck.recordset[0].minutes_since_last;
+      return {
+        statusCode: 429,
+        headers,
+        body: JSON.stringify({
+          message: `Too many login attempts. Please try again in ${minutesRemaining} minutes.`,
+        }),
+      };
     }
 
-    /* ================= FETCH STUDENT ================= */
-    const studentRes = await pool.request()
+    const studentResult = await pool
+      .request()
       .input("usn", sql.VarChar, usn)
       .query(`
-        SELECT
+        SELECT 
           student_id,
-          usn,
           college_id,
+          full_name,
+          usn,
+          email,
+          phone,
           password_hash,
           is_active
         FROM students
         WHERE usn = @usn
       `);
 
-    if (studentRes.recordset.length === 0) {
-      await recordFailedAttempt(pool, usn);
-      return invalidCredentials(headers);
+    if (studentResult.recordset.length === 0) {
+      await pool
+        .request()
+        .input("usn", sql.VarChar, usn)
+        .query(`
+          IF EXISTS (SELECT 1 FROM login_attempts WHERE identifier = @usn)
+          BEGIN
+            UPDATE login_attempts
+            SET attempt_count = attempt_count + 1,
+                last_attempt_at = GETUTCDATE()
+            WHERE identifier = @usn
+          END
+          ELSE
+          BEGIN
+            INSERT INTO login_attempts (identifier, attempt_count, last_attempt_at)
+            VALUES (@usn, 1, GETUTCDATE())
+          END
+        `);
+
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ message: "Invalid credentials" }),
+      };
     }
 
-    const student = studentRes.recordset[0];
+    const student = studentResult.recordset[0];
 
     if (!student.is_active) {
       return {
@@ -122,45 +147,58 @@ exports.handler = async (event) => {
       };
     }
 
-    const passwordValid = await bcrypt.compare(
-      password,
-      student.password_hash
-    );
+    const isMatch = await bcrypt.compare(password, student.password_hash);
 
-    if (!passwordValid) {
-      await recordFailedAttempt(pool, usn);
-      return invalidCredentials(headers);
+    if (!isMatch) {
+      await pool
+        .request()
+        .input("usn", sql.VarChar, usn)
+        .query(`
+          IF EXISTS (SELECT 1 FROM login_attempts WHERE identifier = @usn)
+          BEGIN
+            UPDATE login_attempts
+            SET attempt_count = attempt_count + 1,
+                last_attempt_at = GETUTCDATE()
+            WHERE identifier = @usn
+          END
+          ELSE
+          BEGIN
+            INSERT INTO login_attempts (identifier, attempt_count, last_attempt_at)
+            VALUES (@usn, 1, GETUTCDATE())
+          END
+        `);
+
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ message: "Invalid credentials" }),
+      };
     }
 
-    /* ================= RESET RATE LIMIT ================= */
-    await pool.request()
-      .input("identifier", sql.VarChar, usn)
-      .query(`DELETE FROM login_attempts WHERE identifier = @identifier`);
+    await pool
+      .request()
+      .input("usn", sql.VarChar, usn)
+      .query(`
+        DELETE FROM login_attempts WHERE identifier = @usn
+      `);
 
-    /* ================= JWT ================= */
-    const token = jwt.sign(
-      {
-        student_id: student.student_id,
-        usn: student.usn,
-        college_id: student.college_id,
-        role: "STUDENT",
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "4h" }
-    );
+    await pool
+      .request()
+      .input("student_id", sql.Int, student.student_id)
+      .query(`
+        UPDATE students
+        SET last_login_at = GETUTCDATE()
+        WHERE student_id = @student_id
+      `);
 
-    /* ================= AUDIT LOG ================= */
-    await pool.request()
+    await pool
+      .request()
       .input("actor_user_id", sql.Int, SYSTEM_USER_ID)
-      .input("actor_role", sql.VarChar, "SYSTEM")
+      .input("actor_role", sql.VarChar, "SYSTEM_STUDENT_AUTH")
       .input("action_type", sql.VarChar, "STUDENT_LOGIN")
       .input("entity_type", sql.VarChar, "STUDENT")
       .input("entity_id", sql.Int, student.student_id)
-      .input(
-        "description",
-        sql.VarChar,
-        `Student login successful. USN=${student.usn}`
-      )
+      .input("description", sql.VarChar, `Student login: ${student.usn}`)
       .query(`
         INSERT INTO audit_logs (
           actor_user_id,
@@ -180,6 +218,17 @@ exports.handler = async (event) => {
         )
       `);
 
+    const token = jwt.sign(
+      {
+        student_id: student.student_id,
+        usn: student.usn,
+        college_id: student.college_id,
+        role: "STUDENT",
+      },
+      JWT_SECRET,
+      { expiresIn: '4h' }
+    );
+
     return {
       statusCode: 200,
       headers,
@@ -188,40 +237,18 @@ exports.handler = async (event) => {
         token,
       }),
     };
-
   } catch (err) {
     console.error("Student login error:", err);
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ message: "Internal server error" }),
+      body: JSON.stringify({
+        message: "Internal server error",
+      }),
     };
+  } finally {
+    if (pool) {
+      await pool.close();
+    }
   }
 };
-
-/* ================= HELPERS ================= */
-
-async function recordFailedAttempt(pool, usn) {
-  await pool.request()
-    .input("identifier", sql.VarChar, usn)
-    .query(`
-      MERGE login_attempts AS target
-      USING (SELECT @identifier AS identifier) AS source
-      ON target.identifier = source.identifier
-      WHEN MATCHED THEN
-        UPDATE SET
-          attempt_count = attempt_count + 1,
-          last_attempt_at = SYSUTCDATETIME()
-      WHEN NOT MATCHED THEN
-        INSERT (identifier, attempt_count, last_attempt_at)
-        VALUES (@identifier, 1, SYSUTCDATETIME());
-    `);
-}
-
-function invalidCredentials(headers) {
-  return {
-    statusCode: 401,
-    headers,
-    body: JSON.stringify({ message: "Invalid credentials" }),
-  };
-}
