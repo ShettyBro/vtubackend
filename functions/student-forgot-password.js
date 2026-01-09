@@ -9,7 +9,7 @@ const { Resend } = require('resend');
 // ============================================================================
 const SYSTEM_USER_ID = 1; // MUST exist in users table
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY;
 
 const dbConfig = {
   user: process.env.DB_USER,
