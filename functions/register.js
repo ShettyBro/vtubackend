@@ -22,8 +22,8 @@ const dbConfig = {
 
 const STORAGE_ACCOUNT_NAME = process.env.AZURE_STORAGE_ACCOUNT_NAME;
 const STORAGE_ACCOUNT_KEY = process.env.AZURE_STORAGE_ACCOUNT_KEY;
-const CONTAINER_NAME = 'vtuhabba';
-const SESSION_EXPIRY_MINUTES = 15;
+const CONTAINER_NAME = 'student-documents';
+const SESSION_EXPIRY_MINUTES = 25;
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 const generateSASUrl = (blobName) => {
@@ -235,12 +235,9 @@ exports.handler = async (event) => {
           (@session_id, @usn, @full_name, @email, @phone, @gender, @college_id, @expires_at)
         `);
 
-      const basePath = `${college_code}/${normalizedUSN}`;
+      const basePath = `${college_code}/${normalizedUSN}/photo`;
       const upload_urls = {
-        passport_photo: generateSASUrl(`${basePath}/passport_photo`),
-        aadhaar: generateSASUrl(`${basePath}/aadhaar`),
-        college_id_card: generateSASUrl(`${basePath}/college_id_card`),
-        marks_card_10th: generateSASUrl(`${basePath}/marks_card_10th`),
+        passport_photo: generateSASUrl(`${basePath}/passportphoto`),
       };
 
       return {
@@ -313,39 +310,30 @@ exports.handler = async (event) => {
         .query('SELECT college_code FROM colleges WHERE college_id = @college_id');
 
       const college_code = collegeResult.recordset[0].college_code;
-      const basePath = `${college_code}/${session.usn}`;
+      const passportPhotoBlob = `${college_code}/${session.usn}/photo/passportphoto`;
 
-      const blobNames = [
-        `${basePath}/passport_photo`,
-        `${basePath}/aadhaar`,
-        `${basePath}/college_id_card`,
-        `${basePath}/marks_card_10th`,
-      ];
+      const photoExists = await blobExists(passportPhotoBlob);
+      if (!photoExists) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: 'Passport photo not uploaded' }),
+        };
+      }
 
-      for (const blobName of blobNames) {
-        const exists = await blobExists(blobName);
-        if (!exists) {
-          return {
-            statusCode: 400,
-            headers,
-            body: JSON.stringify({ error: `Missing document: ${blobName.split('/').pop()}` }),
-          };
-        }
-
-        const size = await getBlobSize(blobName);
-        if (size > MAX_FILE_SIZE) {
-          return {
-            statusCode: 400,
-            headers,
-            body: JSON.stringify({ error: `Document ${blobName.split('/').pop()} exceeds 5MB limit` }),
-          };
-        }
+      const photoSize = await getBlobSize(passportPhotoBlob);
+      if (photoSize > MAX_FILE_SIZE) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: 'Passport photo exceeds 5MB limit' }),
+        };
       }
 
       const passwordHash = await bcrypt.hash(password, 10);
 
       const baseUrl = `https://${STORAGE_ACCOUNT_NAME}.blob.core.windows.net/${CONTAINER_NAME}`;
-      const passport_photo_url = `${baseUrl}/${basePath}/passport_photo`;
+      const passport_photo_url = `${baseUrl}/${college_code}/${session.usn}/photo/passportphoto`;
 
       await pool
         .request()
