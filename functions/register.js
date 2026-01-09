@@ -32,12 +32,15 @@ const generateSASUrl = (blobName) => {
     STORAGE_ACCOUNT_KEY
   );
 
+  const now = new Date();
+  
   const sasOptions = {
     containerName: CONTAINER_NAME,
     blobName: blobName,
-    permissions: BlobSASPermissions.parse('w'), // ← Changed from 'cw' to 'w'
-    startsOn: new Date(Date.now() - 1 * 60 * 1000), // ← Changed from 5 mins to 1 min
-    expiresOn: new Date(Date.now() + SESSION_EXPIRY_MINUTES * 60 * 1000),
+    permissions: BlobSASPermissions.parse('cw'), // ← Changed back to 'cw' (create + write)
+    startsOn: new Date(now.getTime() - 5 * 60 * 1000), // 5 mins ago for clock skew
+    expiresOn: new Date(now.getTime() + SESSION_EXPIRY_MINUTES * 60 * 1000),
+    version: '2021-08-06', // ← ADD THIS: specify service version
   };
 
   const sasToken = generateBlobSASQueryParameters(
