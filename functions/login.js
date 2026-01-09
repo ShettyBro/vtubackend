@@ -14,7 +14,7 @@ const dbConfig = {
   },
 };
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET ;
 
 exports.handler = async (event) => {
   const headers = {
@@ -64,7 +64,7 @@ exports.handler = async (event) => {
       return {
         statusCode: 401,
         headers,
-        body: JSON.stringify({ message: "Invalid USN or password" }),
+        body: JSON.stringify({ message: "Server Re-booting.. try 1 min later" }),
       };
     }
 
@@ -84,7 +84,7 @@ exports.handler = async (event) => {
       return {
         statusCode: 401,
         headers,
-        body: JSON.stringify({ message: "Invalid USN or password" }),
+        body: JSON.stringify({ message: "Server Re-booting.. try 1 min later" }),
       };
     }
 
