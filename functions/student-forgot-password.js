@@ -145,6 +145,7 @@ exports.handler = async (event) => {
 
       // Commit transaction
       await transaction.commit();
+      transaction = null;
 
       // Build reset link with raw token (not hashed)
       const resetLink = `${FRONTEND_URL}/reset-password?token=${rawToken}&email=${encodeURIComponent(normalizedEmail)}`;
@@ -168,9 +169,9 @@ exports.handler = async (event) => {
 
       return standardResponse;
     } catch (txError) {
-      await transaction.rollback();
-      throw txError;
-    }
+  if (transaction) await transaction.rollback();  // ADD if check
+  throw txError;
+}
   } catch (error) {
     console.error('Error in student-forgot-password:', error);
 
