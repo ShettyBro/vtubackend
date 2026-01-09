@@ -30,7 +30,7 @@ const dbConfig = {
   },
 };
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://yourapp.com';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://vtufest2026.acharyahabba.com';
 const TOKEN_EXPIRY_MINUTES = 15;
 const ALLOWED_ROLES = ['student', 'manager', 'principal', 'admin', 'subadmin'];
 
