@@ -36,7 +36,7 @@ const generateSASUrl = (blobName) => {
     containerName: CONTAINER_NAME,
     blobName: blobName,
     permissions: BlobSASPermissions.parse('cw'),
-    startsOn: new Date(),
+    startsOn: new Date(Date.now() - 5 * 60 * 1000), // ← Start 5 mins ago (clock skew)
     expiresOn: new Date(Date.now() + SESSION_EXPIRY_MINUTES * 60 * 1000),
   };
 
