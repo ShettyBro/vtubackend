@@ -1,5 +1,3 @@
-
-
 const sql = require('mssql');
 const bcrypt = require('bcryptjs');
 
@@ -49,6 +47,11 @@ exports.handler = async (event) => {
     const body = JSON.parse(event.body || '{}');
     const { usn, token, new_password } = body;
 
+    // DEBUG: Log incoming data
+    console.log('USN:', usn);
+    console.log('Token length:', token ? token.length : 0);
+    console.log('Token (first 10 chars):', token ? token.substring(0, 10) : 'null');
+
     if (!usn || typeof usn !== 'string' || !usn.trim()) {
       return {
         statusCode: 400,
@@ -92,6 +95,7 @@ exports.handler = async (event) => {
       `);
 
     if (studentResult.recordset.length === 0) {
+      console.log('Student not found for USN:', normalizedUSN);
       return {
         statusCode: 400,
         headers,
@@ -100,6 +104,12 @@ exports.handler = async (event) => {
     }
 
     const student = studentResult.recordset[0];
+
+    // DEBUG: Log student data
+    console.log('Student ID:', student.student_id);
+    console.log('Is Active:', student.is_active);
+    console.log('Has reset token:', !!student.password_reset_token);
+    console.log('Token expires:', student.password_reset_expires);
 
     if (!student.is_active) {
       return {
@@ -110,6 +120,7 @@ exports.handler = async (event) => {
     }
 
     if (!student.password_reset_token || !student.password_reset_expires) {
+      console.log('No reset token found in database');
       return {
         statusCode: 400,
         headers,
@@ -120,7 +131,12 @@ exports.handler = async (event) => {
     const tokenExpiry = new Date(student.password_reset_expires);
     const now = new Date();
 
+    console.log('Current time:', now.toISOString());
+    console.log('Token expiry:', tokenExpiry.toISOString());
+    console.log('Is expired:', now > tokenExpiry);
+
     if (now > tokenExpiry) {
+      console.log('Token has expired');
       return {
         statusCode: 400,
         headers,
@@ -128,9 +144,12 @@ exports.handler = async (event) => {
       };
     }
 
+    console.log('Comparing tokens...');
     const tokenValid = await bcrypt.compare(providedToken, student.password_reset_token);
+    console.log('Token valid:', tokenValid);
 
     if (!tokenValid) {
+      console.log('Token comparison failed');
       return {
         statusCode: 400,
         headers,
@@ -152,6 +171,8 @@ exports.handler = async (event) => {
           password_reset_expires = NULL
         WHERE student_id = @student_id
       `);
+
+    console.log('Password reset successful');
 
     return {
       statusCode: 200,
@@ -176,4 +197,3 @@ exports.handler = async (event) => {
     }
   }
 };
-
