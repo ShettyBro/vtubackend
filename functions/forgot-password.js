@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { Resend } = require('resend');
 
-const { Resend } = require('resend');
+
 
 if (!process.env.RESEND_API_KEY) {
   throw new Error('RESEND_API_KEY is not set');
