@@ -4,12 +4,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { Resend } = require('resend');
 
-// ============================================================================
-// SYSTEM USER ID - UPDATE THIS WITH YOUR ACTUAL SYSTEM USER ID FROM DATABASE
-// ============================================================================
-const SYSTEM_USER_ID = 1; // MUST exist in users table
-
-const resend = process.env.RESEND_API_KEY;
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const dbConfig = {
   user: process.env.DB_USER,
@@ -31,7 +26,6 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'https://yourapp.com';
 const TOKEN_EXPIRY_MINUTES = 15;
 
 exports.handler = async (event) => {
-  // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -39,7 +33,6 @@ exports.handler = async (event) => {
     'Content-Type': 'application/json',
   };
 
-  // Handle OPTIONS preflight
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
@@ -48,7 +41,6 @@ exports.handler = async (event) => {
     };
   }
 
-  // Only accept POST
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
@@ -58,12 +50,12 @@ exports.handler = async (event) => {
   }
 
   let pool;
+  let transaction;
 
   try {
     const body = JSON.parse(event.body || '{}');
     const { email } = body;
 
-    // Validate input
     if (!email || typeof email !== 'string' || !email.trim()) {
       return {
         statusCode: 400,
@@ -74,10 +66,8 @@ exports.handler = async (event) => {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Connect to database
     pool = await sql.connect(dbConfig);
 
-    // Check if student exists and is active
     const studentResult = await pool
       .request()
       .input('email', sql.VarChar(255), normalizedEmail)
@@ -87,7 +77,6 @@ exports.handler = async (event) => {
         WHERE email = @email
       `);
 
-    // SECURITY: Always return same response regardless of whether student exists
     const standardResponse = {
       statusCode: 200,
       headers,
@@ -96,7 +85,6 @@ exports.handler = async (event) => {
       }),
     };
 
-    // If student doesn't exist or is inactive, return success without doing anything
     if (studentResult.recordset.length === 0) {
       return standardResponse;
     }
@@ -107,52 +95,43 @@ exports.handler = async (event) => {
       return standardResponse;
     }
 
-    // Generate secure random token (32 bytes = 64 hex chars)
     const rawToken = crypto.randomBytes(32).toString('hex');
-
-    // Hash the token
     const hashedToken = await bcrypt.hash(rawToken, 10);
-
-    // Calculate expiry time
     const expiryTime = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000);
 
-    // Start transaction
-    const transaction = new sql.Transaction(pool);
+    transaction = new sql.Transaction(pool);
     await transaction.begin();
 
     try {
-      // Invalidate any existing reset tokens for this student
       await transaction
         .request()
-        .input('student_id', sql.Int, student.student_id).query(`
+        .input('student_id', sql.Int, student.student_id)
+        .query(`
           UPDATE students
           SET password_reset_token = NULL,
               password_reset_expires = NULL
           WHERE student_id = @student_id
         `);
 
-      // Store hashed token and expiry
       await transaction
         .request()
         .input('student_id', sql.Int, student.student_id)
         .input('hashed_token', sql.VarChar(255), hashedToken)
-        .input('expiry', sql.DateTime2, expiryTime).query(`
+        .input('expiry', sql.DateTime2, expiryTime)
+        .query(`
           UPDATE students
           SET password_reset_token = @hashed_token,
               password_reset_expires = @expiry
           WHERE student_id = @student_id
         `);
 
-      // Commit transaction
       await transaction.commit();
       transaction = null;
 
-      // Build reset link with raw token (not hashed)
       const resetLink = `${FRONTEND_URL}/reset-password?token=${rawToken}&email=${encodeURIComponent(normalizedEmail)}`;
 
-      // Send email via Resend
       await resend.emails.send({
-        from: process.env.FROM_EMAIL || 'noreply@vtufest.com',
+        from: process.env.FROM_EMAIL || 'onboarding@resend.dev',
         to: student.email,
         subject: 'Password Reset Request - VTU Fest',
         html: `
@@ -169,9 +148,11 @@ exports.handler = async (event) => {
 
       return standardResponse;
     } catch (txError) {
-  if (transaction) await transaction.rollback();  // ADD if check
-  throw txError;
-}
+      if (transaction) {
+        await transaction.rollback();
+      }
+      throw txError;
+    }
   } catch (error) {
     console.error('Error in student-forgot-password:', error);
 
