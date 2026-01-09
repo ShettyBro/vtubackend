@@ -151,7 +151,7 @@ exports.handler = async (event) => {
       const resetLink = `${FRONTEND_URL}/reset-password?token=${rawToken}&email=${encodeURIComponent(normalizedEmail)}&role=${role}`;
 
       await resend.emails.send({
-        from: process.env.FROM_EMAIL || 'onboarding@resend.dev',
+        from: process.env.FROM_EMAIL || 'no-reply@acharyahabba.com',
         to: user.email,
         subject: 'Password Reset Request - VTU Fest',
         html: `
