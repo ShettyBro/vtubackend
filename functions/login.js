@@ -42,13 +42,13 @@ exports.handler = async (event) => {
     };
   }
 
-  const { usn, password } = body;
+  const { email, password } = body;
 
-  if (!usn || !password) {
+  if (!email || !password) {
     return {
       statusCode: 400,
       headers,
-      body: JSON.stringify({ message: "USN and password are required" }),
+      body: JSON.stringify({ message: "Email and password are required" }),
     };
   }
 
@@ -57,8 +57,8 @@ exports.handler = async (event) => {
 
     const result = await pool
       .request()
-      .input("usn", sql.VarChar, usn)
-      .query("SELECT * FROM students WHERE usn = @usn");
+      .input("email", sql.VarChar, email)
+      .query("SELECT * FROM students WHERE email = @email");
 
     if (result.recordset.length === 0) {
       return {
