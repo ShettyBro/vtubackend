@@ -35,8 +35,8 @@ const generateSASUrl = (blobName) => {
   const sasOptions = {
     containerName: CONTAINER_NAME,
     blobName: blobName,
-    permissions: BlobSASPermissions.parse('cw'),
-    startsOn: new Date(Date.now() - 5 * 60 * 1000), // ← Start 5 mins ago (clock skew)
+    permissions: BlobSASPermissions.parse('w'), // ← Changed from 'cw' to 'w'
+    startsOn: new Date(Date.now() - 1 * 60 * 1000), // ← Changed from 5 mins to 1 min
     expiresOn: new Date(Date.now() + SESSION_EXPIRY_MINUTES * 60 * 1000),
   };
 
