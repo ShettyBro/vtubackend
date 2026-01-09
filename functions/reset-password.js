@@ -1,3 +1,4 @@
+// reset-password.js
 const sql = require('mssql');
 const bcrypt = require('bcryptjs');
 
@@ -17,6 +18,18 @@ const dbConfig = {
   },
 };
 
+const ALLOWED_ROLES = ['student', 'manager', 'principal', 'admin', 'subadmin'];
+
+const getRoleTable = (role) => {
+  if (role === 'student') return 'students';
+  return 'users';
+};
+
+const getRoleIdColumn = (role) => {
+  if (role === 'student') return 'student_id';
+  return 'user_id';
+};
+
 exports.handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -26,11 +39,7 @@ exports.handler = async (event) => {
   };
 
   if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 200,
-      headers,
-      body: '',
-    };
+    return { statusCode: 200, headers, body: '' };
   }
 
   if (event.httpMethod !== 'POST') {
@@ -44,27 +53,33 @@ exports.handler = async (event) => {
   let pool;
 
   try {
-    const body = JSON.parse(event.body || '{}');
-    const { usn, token, new_password } = body;
+    const path = event.path || event.rawPath || '';
+    const role = path.split('/').pop();
 
-    // DEBUG: Log incoming data
-    console.log('USN:', usn);
-    console.log('Token length:', token ? token.length : 0);
-    console.log('Token (first 10 chars):', token ? token.substring(0, 10) : 'null');
-
-    if (!usn || typeof usn !== 'string' || !usn.trim()) {
+    if (!ALLOWED_ROLES.includes(role)) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ error: 'USN is required' }),
+        body: JSON.stringify({ error: 'Invalid role' }),
       };
     }
+
+    const body = JSON.parse(event.body || '{}');
+    const { token, email, new_password } = body;
 
     if (!token || typeof token !== 'string' || !token.trim()) {
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({ error: 'Reset token is required' }),
+      };
+    }
+
+    if (!email || typeof email !== 'string' || !email.trim()) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Email is required' }),
       };
     }
 
@@ -76,26 +91,28 @@ exports.handler = async (event) => {
       };
     }
 
-    const normalizedUSN = usn.trim().toUpperCase();
+    const normalizedEmail = email.trim().toLowerCase();
     const providedToken = token.trim();
 
     pool = await sql.connect(dbConfig);
 
-    const studentResult = await pool
+    const tableName = getRoleTable(role);
+    const idColumn = getRoleIdColumn(role);
+
+    const result = await pool
       .request()
-      .input('usn', sql.VarChar(50), normalizedUSN)
+      .input('email', sql.VarChar(255), normalizedEmail)
       .query(`
         SELECT 
-          student_id, 
+          ${idColumn}, 
           is_active, 
           password_reset_token, 
           password_reset_expires
-        FROM students
-        WHERE usn = @usn
+        FROM ${tableName}
+        WHERE email = @email
       `);
 
-    if (studentResult.recordset.length === 0) {
-      console.log('Student not found for USN:', normalizedUSN);
+    if (result.recordset.length === 0) {
       return {
         statusCode: 400,
         headers,
@@ -103,15 +120,9 @@ exports.handler = async (event) => {
       };
     }
 
-    const student = studentResult.recordset[0];
+    const user = result.recordset[0];
 
-    // DEBUG: Log student data
-    console.log('Student ID:', student.student_id);
-    console.log('Is Active:', student.is_active);
-    console.log('Has reset token:', !!student.password_reset_token);
-    console.log('Token expires:', student.password_reset_expires);
-
-    if (!student.is_active) {
+    if (!user.is_active) {
       return {
         statusCode: 403,
         headers,
@@ -119,8 +130,7 @@ exports.handler = async (event) => {
       };
     }
 
-    if (!student.password_reset_token || !student.password_reset_expires) {
-      console.log('No reset token found in database');
+    if (!user.password_reset_token || !user.password_reset_expires) {
       return {
         statusCode: 400,
         headers,
@@ -128,15 +138,10 @@ exports.handler = async (event) => {
       };
     }
 
-    const tokenExpiry = new Date(student.password_reset_expires);
+    const tokenExpiry = new Date(user.password_reset_expires);
     const now = new Date();
 
-    console.log('Current time:', now.toISOString());
-    console.log('Token expiry:', tokenExpiry.toISOString());
-    console.log('Is expired:', now > tokenExpiry);
-
     if (now > tokenExpiry) {
-      console.log('Token has expired');
       return {
         statusCode: 400,
         headers,
@@ -144,12 +149,9 @@ exports.handler = async (event) => {
       };
     }
 
-    console.log('Comparing tokens...');
-    const tokenValid = await bcrypt.compare(providedToken, student.password_reset_token);
-    console.log('Token valid:', tokenValid);
+    const tokenValid = await bcrypt.compare(providedToken, user.password_reset_token);
 
     if (!tokenValid) {
-      console.log('Token comparison failed');
       return {
         statusCode: 400,
         headers,
@@ -161,18 +163,16 @@ exports.handler = async (event) => {
 
     await pool
       .request()
-      .input('student_id', sql.Int, student.student_id)
+      .input('id', sql.Int, user[idColumn])
       .input('password_hash', sql.VarChar(255), newPasswordHash)
       .query(`
-        UPDATE students
+        UPDATE ${tableName}
         SET 
           password_hash = @password_hash,
           password_reset_token = NULL,
           password_reset_expires = NULL
-        WHERE student_id = @student_id
+        WHERE ${idColumn} = @id
       `);
-
-    console.log('Password reset successful');
 
     return {
       statusCode: 200,
@@ -182,7 +182,7 @@ exports.handler = async (event) => {
       }),
     };
   } catch (error) {
-    console.error('Error in student-reset-password:', error);
+    console.error('Error in reset-password:', error);
 
     return {
       statusCode: 500,
