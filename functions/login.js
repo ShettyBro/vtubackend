@@ -84,7 +84,7 @@ exports.handler = async (event) => {
       return {
         statusCode: 401,
         headers,
-        body: JSON.stringify({ message: "Server Re-booting.. try 1 min later" }),
+        body: JSON.stringify({ message: "Invalid Email or Password" }),
       };
     }
 
@@ -117,7 +117,7 @@ exports.handler = async (event) => {
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ message: "Error during login", error: err.message }),
+      body: JSON.stringify({ message: "Server Re-booting.. try 1 min later" }),
     };
   }
 };
