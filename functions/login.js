@@ -110,6 +110,8 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         message: "Login successful",
         token,
+        college_id: student.college_id,
+        usn: student.usn,
       }),
     };
   } catch (err) {
