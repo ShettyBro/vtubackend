@@ -14,7 +14,19 @@ const dbConfig = {
   },
 };
 
-const JWT_SECRET = process.env.JWT_SECRET ;
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// Valid roles mapping (frontend -> backend)
+const VALID_ROLES = {
+  student: 'STUDENT',
+  principal: 'PRINCIPAL',
+  manager: 'MANAGER',
+  admin: 'ADMIN',
+  sub_admin: 'SUB_ADMIN',
+  volunteer_registration: 'VOLUNTEER_REGISTRATION',
+  volunteer_helpdesk: 'VOLUNTEER_HELPDESK',
+  volunteer_event: 'VOLUNTEER_EVENT',
+};
 
 exports.handler = async (event) => {
   const headers = {
@@ -42,19 +54,52 @@ exports.handler = async (event) => {
     };
   }
 
-  const { email, password } = body;
+  const { email, password, role } = body;
 
-  if (!email || !password) {
+  // Validate required fields
+  if (!email || !password || !role) {
     return {
       statusCode: 400,
       headers,
-      body: JSON.stringify({ message: "Email and password are required" }),
+      body: JSON.stringify({ message: "Email, password, and role are required" }),
+    };
+  }
+
+  // Validate role
+  const normalizedRole = VALID_ROLES[role.toLowerCase()];
+  if (!normalizedRole) {
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({ message: "Invalid role specified" }),
     };
   }
 
   try {
     const pool = await sql.connect(dbConfig);
 
+    // Route to appropriate login handler based on role
+    if (normalizedRole === 'STUDENT') {
+      return await handleStudentLogin(pool, email, password, headers);
+    } else {
+      return await handleUserLogin(pool, email, password, normalizedRole, headers);
+    }
+
+  } catch (err) {
+    console.error("Login error:", err);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ message: "Server Re-booting.. try 1 min later" }),
+    };
+  }
+};
+
+// ============================================
+// STUDENT LOGIN HANDLER
+// ============================================
+async function handleStudentLogin(pool, email, password, headers) {
+  try {
     const result = await pool
       .request()
       .input("email", sql.VarChar, email)
@@ -64,12 +109,13 @@ exports.handler = async (event) => {
       return {
         statusCode: 401,
         headers,
-        body: JSON.stringify({ message: "Server Re-booting.. try 1 min later" }),
+        body: JSON.stringify({ message: "Invalid Email or Password" }),
       };
     }
 
     const student = result.recordset[0];
 
+    // Check if account is active
     if (!student.is_active) {
       return {
         statusCode: 403,
@@ -78,6 +124,7 @@ exports.handler = async (event) => {
       };
     }
 
+    // Verify password
     const isMatch = await bcrypt.compare(password, student.password_hash);
 
     if (!isMatch) {
@@ -88,6 +135,7 @@ exports.handler = async (event) => {
       };
     }
 
+    // Generate JWT token
     const token = jwt.sign(
       {
         student_id: student.student_id,
@@ -99,6 +147,7 @@ exports.handler = async (event) => {
       { expiresIn: "4h" }
     );
 
+    // Update last login
     await pool
       .request()
       .input("student_id", sql.Int, student.student_id)
@@ -110,16 +159,101 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         message: "Login successful",
         token,
+        role: "student",
         college_id: student.college_id,
         usn: student.usn,
+        name: student.full_name,
       }),
     };
   } catch (err) {
     console.error("Student login error:", err);
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ message: "Server Re-booting.. try 1 min later" }),
-    };
+    throw err;
   }
-};
+}
+
+// ============================================
+// USER LOGIN HANDLER (Principal, Manager, Admin, Volunteers)
+// ============================================
+async function handleUserLogin(pool, email, password, expectedRole, headers) {
+  try {
+    const result = await pool
+      .request()
+      .input("email", sql.VarChar, email)
+      .input("role", sql.VarChar, expectedRole)
+      .query("SELECT * FROM users WHERE email = @email AND role = @role");
+
+    if (result.recordset.length === 0) {
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ message: "Invalid Email or Password" }),
+      };
+    }
+
+    const user = result.recordset[0];
+
+    // Check if account is active
+    if (!user.is_active) {
+      return {
+        statusCode: 403,
+        headers,
+        body: JSON.stringify({ message: "Account is inactive" }),
+      };
+    }
+
+    // Verify password
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+
+    if (!isMatch) {
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ message: "Invalid Email or Password" }),
+      };
+    }
+
+    // Generate JWT token payload based on role
+    const tokenPayload = {
+      user_id: user.user_id,
+      full_name: user.full_name,
+      role: expectedRole,
+    };
+
+    // Add college_id only for PRINCIPAL and MANAGER
+    if (expectedRole === 'PRINCIPAL' || expectedRole === 'MANAGER') {
+      tokenPayload.college_id = user.college_id;
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: "4h" });
+
+    // Update last login
+    await pool
+      .request()
+      .input("user_id", sql.Int, user.user_id)
+      .query("UPDATE users SET last_login_at = GETUTCDATE() WHERE user_id = @user_id");
+
+    // Prepare response data
+    const responseData = {
+      message: "Login successful",
+      token,
+      role: expectedRole.toLowerCase().replace(/_/g, '_'), // Keep underscore format for frontend
+      name: user.full_name,
+      user_id: user.user_id,
+    };
+
+    // Add college_id to response for PRINCIPAL and MANAGER
+    if (user.college_id) {
+      responseData.college_id = user.college_id;
+    }
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify(responseData),
+    };
+  } catch (err) {
+    console.error("User login error:", err);
+    throw err;
+  }
+}
