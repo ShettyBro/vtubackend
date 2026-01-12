@@ -240,6 +240,7 @@ async function handleUserLogin(pool, email, password, expectedRole, headers) {
       role: expectedRole.toLowerCase().replace(/_/g, '_'), // Keep underscore format for frontend
       name: user.full_name,
       user_id: user.user_id,
+      college_id: user.college_id,
     };
 
     // Add college_id to response for PRINCIPAL and MANAGER
