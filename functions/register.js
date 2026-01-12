@@ -33,7 +33,7 @@ const generateSASUrl = (blobName) => {
   );
 
   const now = new Date();
-  
+
   const sasOptions = {
     containerName: CONTAINER_NAME,
     blobName: blobName,
@@ -238,11 +238,10 @@ exports.handler = async (event) => {
           (@session_id, @usn, @full_name, @email, @phone, @gender, @college_id, @expires_at)
         `);
 
-      const basePath = `${college_code}/${normalizedUSN}/photo`;
+      const basePath = `${college_code}/${normalizedUSN}/registration`;
       const upload_urls = {
-        passport_photo: generateSASUrl(`${basePath}/passportphoto`),
+        passport_photo: generateSASUrl(`${basePath}/passport_photo`),
       };
-
       return {
         statusCode: 200,
         headers,
@@ -313,7 +312,7 @@ exports.handler = async (event) => {
         .query('SELECT college_code FROM colleges WHERE college_id = @college_id');
 
       const college_code = collegeResult.recordset[0].college_code;
-      const passportPhotoBlob = `${college_code}/${session.usn}/photo/passportphoto`;
+      const passportPhotoBlob = `${college_code}/${session.usn}/registration/passport_photo`;
 
       const photoExists = await blobExists(passportPhotoBlob);
       if (!photoExists) {
@@ -336,7 +335,7 @@ exports.handler = async (event) => {
       const passwordHash = await bcrypt.hash(password, 10);
 
       const baseUrl = `https://${STORAGE_ACCOUNT_NAME}.blob.core.windows.net/${CONTAINER_NAME}`;
-      const passport_photo_url = `${baseUrl}/${college_code}/${session.usn}/photo/passportphoto`;
+      const passport_photo_url = `${baseUrl}/${college_code}/${session.usn}/registration/passport_photo`;
 
       await pool
         .request()
