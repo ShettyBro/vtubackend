@@ -4,19 +4,6 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require("nodemailer");
 
-// const transporter = nodemailer.createTransport({
-//   host: process.env.SMTP_HOST,
-//   port: Number(process.env.SMTP_PORT),
-//   secure: false, // for port 587
-//   auth: {
-//     user: process.env.SMTP_USER, // "apikey"
-//     pass: process.env.SMTP_PASS  // Brevo SMTP key
-//   }
-// });
-
-
-
-
 const dbConfig = {
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
@@ -174,12 +161,7 @@ exports.handler = async (event) => {
           rejectUnauthorized: false
         }
       });
-      try {
-        await transporter.verify();
-        console.log("SMTP VERIFIED OK");
-      } catch (e) {
-        console.error("SMTP VERIFY FAILED:", e);
-      }
+     
 
       await transporter.sendMail({
         from: process.env.FROM_EMAIL,
