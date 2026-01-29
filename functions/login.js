@@ -1,6 +1,7 @@
 const sql = require('mssql');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const dbConfig = {
@@ -15,6 +16,10 @@ const dbConfig = {
 };
 
 const JWT_SECRET = process.env.JWT_SECRET;
+
+// Default password hash for all new managers/principals
+// Generated from: Test@1234
+const DEFAULT_PASSWORD_HASH = '$2a$10$YourActualHashHere'; // ⚠️ REPLACE with actual hash from your script
 
 // Valid roles mapping (frontend -> backend)
 const VALID_ROLES = {
@@ -212,6 +217,45 @@ async function handleUserLogin(pool, email, password, expectedRole, headers) {
       };
     }
 
+    // ⚠️ CRITICAL: Check if user is using default password AND has force_password_reset flag
+    const isDefaultPassword = await bcrypt.compare(password, DEFAULT_PASSWORD_HASH);
+    
+    if (isDefaultPassword && user.force_password_reset) {
+      // Generate a special 15-minute token for forced password reset
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const hashedResetToken = await bcrypt.hash(resetToken, 10);
+      const expiryTime = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+      // Store reset token in database
+      await pool
+        .request()
+        .input('user_id', sql.Int, user.user_id)
+        .input('hashed_token', sql.VarChar(255), hashedResetToken)
+        .input('expiry', sql.DateTime2, expiryTime)
+        .query(`
+          UPDATE users
+          SET password_reset_token = @hashed_token,
+              password_reset_expires = @expiry
+          WHERE user_id = @user_id
+        `);
+
+      // ⚠️ DO NOT generate JWT session token
+      // Return FORCE_RESET status with reset token for frontend redirect
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          status: "FORCE_RESET",
+          message: "First-time login detected. Please reset your password.",
+          reset_token: resetToken,
+          email: user.email,
+          role: expectedRole.toLowerCase().replace(/_/g, '_'),
+        }),
+      };
+    }
+
+    // ✅ Normal login flow continues (password is not default OR flag is false)
+    
     // Generate JWT token payload based on role
     const tokenPayload = {
       user_id: user.user_id,

@@ -67,6 +67,7 @@ exports.handler = async (event) => {
     const body = JSON.parse(event.body || '{}');
     const { token, email, new_password } = body;
 
+    // ✅ Validate token exists (required for both flows)
     if (!token || typeof token !== 'string' || !token.trim()) {
       return {
         statusCode: 400,
@@ -99,15 +100,17 @@ exports.handler = async (event) => {
     const tableName = getRoleTable(role);
     const idColumn = getRoleIdColumn(role);
 
+    // ✅ Fetch user with force_password_reset flag (for users table only)
+    let queryColumns = `${idColumn}, is_active, password_reset_token, password_reset_expires`;
+    if (tableName === 'users') {
+      queryColumns += ', force_password_reset';
+    }
+
     const result = await pool
       .request()
       .input('email', sql.VarChar(255), normalizedEmail)
       .query(`
-        SELECT 
-          ${idColumn}, 
-          is_active, 
-          password_reset_token, 
-          password_reset_expires
+        SELECT ${queryColumns}
         FROM ${tableName}
         WHERE email = @email
       `);
@@ -122,6 +125,7 @@ exports.handler = async (event) => {
 
     const user = result.recordset[0];
 
+    // Check if account is active
     if (!user.is_active) {
       return {
         statusCode: 403,
@@ -130,6 +134,7 @@ exports.handler = async (event) => {
       };
     }
 
+    // ✅ Validate token exists in database
     if (!user.password_reset_token || !user.password_reset_expires) {
       return {
         statusCode: 400,
@@ -138,6 +143,7 @@ exports.handler = async (event) => {
       };
     }
 
+    // ✅ Check token expiry
     const tokenExpiry = new Date(user.password_reset_expires);
     const now = new Date();
 
@@ -149,6 +155,7 @@ exports.handler = async (event) => {
       };
     }
 
+    // ✅ Verify token matches (works for both forgot-password and forced reset)
     const tokenValid = await bcrypt.compare(providedToken, user.password_reset_token);
 
     if (!tokenValid) {
@@ -159,21 +166,33 @@ exports.handler = async (event) => {
       };
     }
 
+    // ✅ Hash new password
     const newPasswordHash = await bcrypt.hash(new_password, 10);
+
+    // ✅ Update password and clear reset token
+    // For users with force_password_reset flag, also set it to false
+    let updateQuery = `
+      UPDATE ${tableName}
+      SET 
+        password_hash = @password_hash,
+        password_reset_token = NULL,
+        password_reset_expires = NULL
+    `;
+
+    // ⚠️ CRITICAL: Clear force_password_reset flag after successful reset
+    if (tableName === 'users' && user.force_password_reset) {
+      updateQuery += ', force_password_reset = 0';
+    }
+
+    updateQuery += ` WHERE ${idColumn} = @id`;
 
     await pool
       .request()
       .input('id', sql.Int, user[idColumn])
       .input('password_hash', sql.VarChar(255), newPasswordHash)
-      .query(`
-        UPDATE ${tableName}
-        SET 
-          password_hash = @password_hash,
-          password_reset_token = NULL,
-          password_reset_expires = NULL
-        WHERE ${idColumn} = @id
-      `);
+      .query(updateQuery);
 
+    // ✅ Success response (same for both flows)
     return {
       statusCode: 200,
       headers,
