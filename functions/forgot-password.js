@@ -2,7 +2,7 @@
 const sql = require('mssql');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-import nodemailer from "nodemailer";
+const nodemailer = require("nodemailer");
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
