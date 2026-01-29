@@ -161,21 +161,36 @@ exports.handler = async (event) => {
 
       const resetLink = `${FRONTEND_URL}/reset-password?token=${rawToken}&email=${encodeURIComponent(normalizedEmail)}&role=${role}`;
 
-      await transporter.sendMail({
+      // await transporter.sendMail({
+      //   from: process.env.FROM_EMAIL,
+      //   to: user.email,
+      //   subject: 'Password Reset Request - VTU Fest',
+      //   html: `
+      //     <h2>Password Reset Request</h2>
+      //     <p>Hi ${user.full_name || 'User'},</p>
+      //     <p>You requested to reset your password. Click the link below to reset it:</p>
+      //     <p><a href="${resetLink}">Reset Password</a></p>
+      //     <p>This link will expire in ${TOKEN_EXPIRY_MINUTES} minutes.</p>
+      //     <p>If you didn't request this, please ignore this email.</p>
+      //     <br>
+      //     <p>VTU Fest Team</p>
+      //   `,
+      // });
+
+      console.log("About to send email via Brevo");
+      console.log("SMTP HOST:", process.env.SMTP_HOST);
+      console.log("FROM_EMAIL:", process.env.FROM_EMAIL);
+      console.log("TO:", user.email);
+
+      const info = await transporter.sendMail({
         from: process.env.FROM_EMAIL,
         to: user.email,
         subject: 'Password Reset Request - VTU Fest',
-        html: `
-          <h2>Password Reset Request</h2>
-          <p>Hi ${user.full_name || 'User'},</p>
-          <p>You requested to reset your password. Click the link below to reset it:</p>
-          <p><a href="${resetLink}">Reset Password</a></p>
-          <p>This link will expire in ${TOKEN_EXPIRY_MINUTES} minutes.</p>
-          <p>If you didn't request this, please ignore this email.</p>
-          <br>
-          <p>VTU Fest Team</p>
-        `,
+        html: `test email`
       });
+
+      console.log("Email sent result:", info);
+
 
       return standardResponse;
     } catch (txError) {
