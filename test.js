@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 
-const password = "Test@1234";
+const password = "Acharya@2026";
 const saltRounds = 10;
 
 try {

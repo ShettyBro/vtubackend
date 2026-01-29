@@ -19,7 +19,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 // Default password hash for all new managers/principals
 // Generated from: Test@1234
-const DEFAULT_PASSWORD_HASH = '$2a$10$YourActualHashHere'; // ⚠️ REPLACE with actual hash from your script
+const DEFAULT_PASSWORD_HASH = '$2a$10$8LqCD6g0T9LYB9dlXuHrq.CTNVNJgbWx4d8bhjnObPTqluAC0nRUy'; // ⚠️ REPLACE with actual hash from your script
 
 // Valid roles mapping (frontend -> backend)
 const VALID_ROLES = {
