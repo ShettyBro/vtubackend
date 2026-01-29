@@ -4,15 +4,15 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require("nodemailer");
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: false, // for port 587
-  auth: {
-    user: process.env.SMTP_USER, // "apikey"
-    pass: process.env.SMTP_PASS  // Brevo SMTP key
-  }
-});
+// const transporter = nodemailer.createTransport({
+//   host: process.env.SMTP_HOST,
+//   port: Number(process.env.SMTP_PORT),
+//   secure: false, // for port 587
+//   auth: {
+//     user: process.env.SMTP_USER, // "apikey"
+//     pass: process.env.SMTP_PASS  // Brevo SMTP key
+//   }
+// });
 
 
 
@@ -160,13 +160,14 @@ exports.handler = async (event) => {
       transaction = null;
 
       const resetLink = `${FRONTEND_URL}/reset-password?token=${rawToken}&email=${encodeURIComponent(normalizedEmail)}&role=${role}`;
+      
       const transporter = nodemailer.createTransport({
-        host: "smtp-relay.brevo.com",
-        port: 587,
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT),
         secure: false,
         requireTLS: true,
         auth: {
-          user: "apikey",
+          user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS
         },
         tls: {
