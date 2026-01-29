@@ -2,16 +2,19 @@
 const sql = require('mssql');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { Resend } = require('resend');
+import nodemailer from "nodemailer";
+
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT),
+  secure: false, // for port 587
+  auth: {
+    user: process.env.SMTP_USER, // "apikey"
+    pass: process.env.SMTP_PASS  // Brevo SMTP key
+  }
+});
 
 
-
-
-if (!process.env.RESEND_API_KEY) {
-  throw new Error('RESEND_API_KEY is not set');
-}
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 
 const dbConfig = {
@@ -158,8 +161,8 @@ exports.handler = async (event) => {
 
       const resetLink = `${FRONTEND_URL}/reset-password?token=${rawToken}&email=${encodeURIComponent(normalizedEmail)}&role=${role}`;
 
-      await resend.emails.send({
-        from: process.env.FROM_EMAIL || 'no-reply@acharyahabba.com',
+      await transporter.sendMail({
+        from: process.env.FROM_EMAIL,
         to: user.email,
         subject: 'Password Reset Request - VTU Fest',
         html: `
